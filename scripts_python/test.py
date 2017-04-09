@@ -56,4 +56,6 @@ print(im.size)
 im.save('Namoi_at_2330_Z_on_2017_02_12_el_0.5_and1.8_Dop_Velocity_72.png',dpi=72)
 #im=[Image.open(fn) for fn in images]
 #images2gif.writeGif('test1.gif',im,duration=0.1)
-#os.system('convert *.png test.gif')
+#os.system('convert *.png test.gif
+
+#random change to test github

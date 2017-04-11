@@ -3,20 +3,6 @@
 #
 # In[3]:
 #
-#imports
-from __future__ import print_function
-import pyart
-import matplotlib.pyplot as plt
-import matplotlib
-#%matplotlib inline
-import numpy as np
-import os
-from scipy import ndimage, signal
-import scipy.ndimage as spyi
-from netCDF4 import num2date, date2num
-import datetime as dt
-from mpl_toolkits.basemap import Basemap
-#
 from functions import *
 #
 # In[4]:
@@ -42,20 +28,22 @@ outloc = '../plots/'
 #         dirname + i,
 #         file_field_names=True
 #     )
+#     for cs,sweep in enumerate(myrad.sweep_number['data']):
 
-#     plot_bolton_bom(myrad,0,3,True)
+#         plot_bolton_bom(myradar=myrad,sweep=sweep,field='DBZH',option='save')
+    
 #     print('{} files processed over {}. {}% Done'.format(c+1,len(fls),(c+1)/len(fls)*100))
 
 #-------------------------------------------------
-#
-#-------------------------------------------------
-#makeAnimatedGif('../plots/Dop_velocity/','Doppler')
-os.chdir('../plots/Dop_velocity/')
-im=Image.open('Namoi_at_2330_Z_on_2017_02_12_el_0.5_and1.8_Dop_Velocity.png')
-print(im.size)
-im.save('Namoi_at_2330_Z_on_2017_02_12_el_0.5_and1.8_Dop_Velocity_72.png',dpi=72)
-#im=[Image.open(fn) for fn in images]
-#images2gif.writeGif('test1.gif',im,duration=0.1)
-#os.system('convert *.png test.gif
+# myrad=pyart.aux_io.read_odim_h5(dirname+fls[20],file_field_names=True)
+# plot_bolton_bom(myradar=myrad,sweep=0,field='WRADH',option='show')
+#print('nb of sweep: {}'.format(myrad.nsweeps))
 
-#random change to test github
+#for s in myrad.sweep_number['data']:
+#     el=myrad.get_elevation(s)[0]
+#     print('sweep={}, el={}'.format(s,el) )
+#-------------------------------------------------
+#for f in myrad.fields.keys():
+#    print(f)
+makeMP4('reflectivity')
+

@@ -34,19 +34,7 @@ fls.sort()
 outloc = '../plots/'
 #
 #-------------------------------------------------
-#creating a radar object from the specified file
-#then plotting the velocity and reflectivity contourlines
-#-------------------------------------------------
-
-for c,i in enumerate(fls):
-    myrad=pyart.aux_io.read_odim_h5(
-        dirname + i,
-        file_field_names=True
-    )
-
-    plot_bolton_bom(myrad,0,3)
-    print('{} files processed over {}. {}% Done'.format(c+1,len(fls),(c+1)/len(fls)*100))
-
-# myrad=pyart.aux_io.read_odim_h5(dirname+fls[30],file_field_names=True)
-# plot_bolton_bom(myrad,0,3)
- 
+myrad=pyart.aux_io.odim_h5.read_odim_h5(dirname+fls[30],file_field_names=True)
+plot_bolton_1_slice(myradar=myrad,sweep=0,field="VRADH",option='show')
+# for k in myrad.fields.keys():
+#     print(k)

@@ -35,8 +35,8 @@ outloc = '../plots/'
 #     print('{} files processed over {}. {}% Done'.format(c+1,len(fls),(c+1)/len(fls)*100))
 
 #-------------------------------------------------
-# myrad=pyart.aux_io.read_odim_h5(dirname+fls[20],file_field_names=True)
-# plot_bolton_bom(myradar=myrad,sweep=0,field='WRADH',option='show')
+#myrad=pyart.aux_io.read_odim_h5(dirname+fls[20],file_field_names=True)
+#plot_bolton_bom(myradar=myrad,sweep=0,field='WRADH',option='show')
 #print('nb of sweep: {}'.format(myrad.nsweeps))
 
 #for s in myrad.sweep_number['data']:
@@ -45,5 +45,5 @@ outloc = '../plots/'
 #-------------------------------------------------
 #for f in myrad.fields.keys():
 #    print(f)
-makeMP4('reflectivity')
+#makeMP4('reflectivity')
 

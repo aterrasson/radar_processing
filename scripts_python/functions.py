@@ -8,7 +8,7 @@
 from imports import *
 
     #---------------------------------------
-    # Range of lat/lon for the plot
+    # Range of lat/lonfor the plot
     #---------------------------------------
     #                                         East        South     West       North 
 min_lon, min_lat, max_lon, max_lat = [149.2767,-32.5433,151.1526,-31.4764]
@@ -215,10 +215,12 @@ def plot_bolton_2_slices(myradar,sweep,azimuth,field,len_slice=180,option='show'
     if azimuth is int:azimuth=[azimuth]
     max_alt_rhi=12
     myrad_rhi=pyart.util.cross_section_ppi(myradar,azimuth)
-    for n,a in enumerate(azimuth):
-        print('azimuth = {} \n'.format(a))
-        for ele in myrad_rhi.get_elevation(n):
-            print(ele)
+
+    # print the available elevation for the chosen azimuth
+    # for n,a in enumerate(azimuth):
+    #     print('azimuth = {} \n'.format(a))
+    #     for ele in myrad_rhi.get_elevation(n):
+    #         print(ele)
     #-------------------------------------------------
     #create the displays (radar map type)
     #-------------------------------------------------
@@ -357,7 +359,141 @@ def makeMP4(field):
         print(cmd)
         os.system(cmd)
         print('Video created: {}/{}_{}.mp4'.format(output,field,angle))
-        
+
+def give_my_point_a_value(point,myradar,field,sweep):
+    
+    """
+    return altitude and field value from the closest radar point available 
+    point - 2-tuple: (lon,lat) in WG84
+    myradar - radar object (only tested with ppi radar)
+    sweep - int
+
+    return:
+    z - double (m) altitude of the closest measured point
+    data - double (unit depends on the chosen field)
+    gap - double sum of the latitude gap and the lontitude gap between the input point and the closest radar point
+    """
+    x,y=point
+    # selecting the data from the right sweep
+    start=myradar.get_start(sweep)
+    end=myradar.get_end(sweep)+1
+    
+    # We find the minimum distance between our point and the radar data
+    # A is the list of longitude gaps added to latitude gaps
+    A=[
+        abs(x-xrad)+abs(y-yrad)
+        for xrad,yrad in zip (myradar.gate_longitude['data'][start:end], myradar.gate_latitude['data'][start:end])
+    ]
+    
+    # conversion into an array
+    B=np.array(A)
+    
+    # get the matrix coordinates of closest radar point
+    minx,miny=np.unravel_index( np.argmin(B) , B.shape )
+
+    #saving the gap value
+    gap=B[minx,miny]
+    #print(gap)
+
+    #affecting z and field value of the closest radar point
+    z,data=myradar.gate_altitude['data'][start:end][minx][miny],myradar.fields[field]['data'][start:end][minx][miny]
+    print('closest point from ({} E,{} N) found is ({} E,{} N)'.format(x,y,myradar.gate_longitude['data'][start:end][minx][miny],myradar.gate_latitude['data'][start:end][minx][miny]) )
+
+    return z,data,gap
+
+def create_line(point1,point2,z_max=10,nb_pt=100,type='lat_lon'):
+    """
+    create a line between two given point
+    start_point - 2 tuple
+    end_point - 2 tuple
+    nb_pt - int
+    type - string, not useful yet
+
+    return:
+    line - list of 2 tuple. each tuple is a point of the line
+    """
+    x1,y1=point1
+    x2,y2=point2
+
+    X=np.linspace(x1,x2,nb_pt)
+    Y=np.linspace(y1,y2,nb_pt)
+    Z=np.linspace(0,z_max,100)
+
+    X1,X2,X3=np.meshgrid(X,Y,Z)
+    return X1,X2,X3
 
 
+def get_slice_plan(origin,azimuth):
+    """
+    return the origin and vectors argument for affineSlice from a point and a direction
+    point - tuple (lon,lat,altitude), origin point of the slice
+    azimuth - int, azimuth of the slice
+    """
+    origin=origin
+    
+    deg=math.radians(-azimuth+90)
+    vectors=((math.cos(deg),math.sin(deg),0),(0,0,1))
+    
+    return(origin,vectors)
+
+
+def plot_slice(myradar,point1,point2,field):
+    """
+    The goal is to plot a slice of a field along a chosen line
+
+    Steps:
+    1 - extract the gates for longitude/latitude/altitude/chosen field
+    2 - narrow the values to fit a chosen window (the line has to be included in the window) to accelerate the regridding operation
+    3 - regrid  so the chosen line becomes a axis of the new grid (may need some transformation if the chosen lne is not parallel to the longitude of latitude axis. transformation will be step 3.5)
+    4 - extract the plan formed by the chosen line and the z axis
+    5 - plot the plan with the value and the field
+
+    Inputs:
+    radar - radar object from pyart
+    point1 - tuple (longitude ,latitude) first point of the line
+    point2 - tuple (longitude ,latitude) last point of the line
+    field - string 'VRADH' or 'WRADH' or 'DBZH' field to plot
+
+    """
+    #-------------------------------------------------------
+    # Step 1
+    #-------------------------------------------------------
+
+    # get the gates
+    flat_LON=np.array(myradar.gate_longitude['data']).flatten()
+    flat_LAT=np.array(myradar.gate_latitude['data']).flatten()
+    flat_ALT=np.array(myradar.gate_altitude['data']).flatten()
+    flat_DATA=np.array(myradar.fields[field]['data']).flatten()
+
+    #-------------------------------------------------------
+    # Step 2
+    #-------------------------------------------------------
+    
+    # getting the start/end points
+    lon1,lat1=point1
+    lon2,lat2=point2
+    
+    # sizing the window
+    min_lon=min(lon1,lon2)-0.01
+    min_lat=min(lat1,lat2)-0.01
+    max_lon=min(lon1,lon2)+0.01
+    max_lat=min(lat1,lat2)+0.01
+
+    # reducing the data to the window
+    index_lon=[]
+    index_lat=[]
+    [index_lon.append(index ) for index,p in enumerate(flat_LON) if p<max_lon and p>min_lon]
+    [index_lat.append(index ) for index,p in enumerate(flat_LAT) if p<max_lat and p>min_lat]
+    index_window=list(set(index_lon) & set(index_lat))
+    print('len index_lon = {}'.format(len(index_lon)))
+    print('len index_lat = {}'.format(len(index_lat)))
+    print('len index_window = {}'.format(len(index_window)))
+
+    flat_LON=flat_LON[index_window]
+    flat_LAT=flat_LAT[index_window]
+    flat_ALT=flat_ALT[index_window]
+    flat_DATA=flat_DATA[index_window]
+
+    print('{}\n\n{}'.format(flat_LON,flat_LAT))
+    
 

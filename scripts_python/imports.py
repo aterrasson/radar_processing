@@ -11,6 +11,7 @@ import numpy as np
 import os
 from scipy import ndimage, signal
 import scipy.ndimage as spyi
+import scipy
 from netCDF4 import num2date, date2num
 import datetime as dt
 from mpl_toolkits.basemap import Basemap
@@ -22,3 +23,4 @@ import random
 import argparse
 import webbrowser
 import shutil
+import pyqtgraph

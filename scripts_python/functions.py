@@ -203,7 +203,7 @@ def plot_bolton_2_slices(myradar,sweep,azimuth,field,len_slice=180,option='show'
         
     #plot of reflectivity
     elif field=='DBZH':
-        [outloc,vmin,vmax,colorbar_label,cmap,reference]=['../plots/reflectivity/angle_{}/'.format(el1),0,50,'Reflectivity (dBZ)',None,'Reflectivity']
+        [outloc,vmin,vmax,colorbar_label,cmap,reference]=['../plots/reflectivity/angle_{}/'.format(el1),0,50,'Reflectivity (dBZ)',pyart.graph.cm.LangRainbow12,'Reflectivity']
         
     #plot spec width
     elif field=='WRADH':
@@ -401,41 +401,6 @@ def give_my_point_a_value(point,myradar,field,sweep):
 
     return z,data,gap
 
-def create_line(point1,point2,z_max=10,nb_pt=100,type='lat_lon'):
-    """
-    create a line between two given point
-    start_point - 2 tuple
-    end_point - 2 tuple
-    nb_pt - int
-    type - string, not useful yet
-
-    return:
-    line - list of 2 tuple. each tuple is a point of the line
-    """
-    x1,y1=point1
-    x2,y2=point2
-
-    X=np.linspace(x1,x2,nb_pt)
-    Y=np.linspace(y1,y2,nb_pt)
-    Z=np.linspace(0,z_max,100)
-
-    X1,X2,X3=np.meshgrid(X,Y,Z)
-    return X1,X2,X3
-
-
-def get_slice_plan(origin,azimuth):
-    """
-    return the origin and vectors argument for affineSlice from a point and a direction
-    point - tuple (lon,lat,altitude), origin point of the slice
-    azimuth - int, azimuth of the slice
-    """
-    origin=origin
-    
-    deg=math.radians(-azimuth+90)
-    vectors=((math.cos(deg),math.sin(deg),0),(0,0,1))
-    
-    return(origin,vectors)
-
 
 def plot_slice(myradar,point1,point2,field):
     """
@@ -444,8 +409,9 @@ def plot_slice(myradar,point1,point2,field):
     Steps:
     1 - extract the gates for longitude/latitude/altitude/chosen field
     2 - narrow the values to fit a chosen window (the line has to be included in the window) to accelerate the regridding operation
-    3 - regrid  so the chosen line becomes a axis of the new grid (may need some transformation if the chosen lne is not parallel to the longitude of latitude axis. transformation will be step 3.5)
+    3 - generate a meshgrid and rotate it so one of the axis becomes the chosen line. Then interpolate our field on the meshgrid
     4 - extract the plan formed by the chosen line and the z axis
+, mask the nans values    
     5 - plot the plan with the value and the field
 
     Inputs:
@@ -453,6 +419,11 @@ def plot_slice(myradar,point1,point2,field):
     point1 - tuple (longitude ,latitude) first point of the line
     point2 - tuple (longitude ,latitude) last point of the line
     field - string 'VRADH' or 'WRADH' or 'DBZH' field to plot
+
+    Possibles ways of improvements:
+    - 
+    - Reducing the windows size by having a window parallel to the line (currently the window is parallel to the longitude axe)
+    - Modify the size of the meshgrid we interpole on to better match the number of gates along the chosen line
 
     """
     #-------------------------------------------------------
@@ -476,8 +447,8 @@ def plot_slice(myradar,point1,point2,field):
     # sizing the window
     min_lon=min(lon1,lon2)-0.01
     min_lat=min(lat1,lat2)-0.01
-    max_lon=min(lon1,lon2)+0.01
-    max_lat=min(lat1,lat2)+0.01
+    max_lon=max(lon1,lon2)+0.01
+    max_lat=max(lat1,lat2)+0.01
 
     # reducing the data to the window
     index_lon=[]
@@ -485,15 +456,227 @@ def plot_slice(myradar,point1,point2,field):
     [index_lon.append(index ) for index,p in enumerate(flat_LON) if p<max_lon and p>min_lon]
     [index_lat.append(index ) for index,p in enumerate(flat_LAT) if p<max_lat and p>min_lat]
     index_window=list(set(index_lon) & set(index_lat))
-    print('len index_lon = {}'.format(len(index_lon)))
-    print('len index_lat = {}'.format(len(index_lat)))
-    print('len index_window = {}'.format(len(index_window)))
+    #print('len index_lon = {}'.format(len(index_lon)))
+    #print('len index_lat = {}'.format(len(index_lat)))
+    
+    # Feedback on the window dimension and size
+    print("""
+Window dimensions:
+
+    ({0:.5},{3:.5})-------------------------({2:.5},{3:.5})
+          |                                          |
+          |                                          |
+          |                                          |
+    ({0:.5},{1:.5})-------------------------({2:.5},{1:.5})
+
+
+    """.format(min_lon,min_lat,max_lon,max_lat)
+)
+    print('Number of points in the window = {}'.format(len(index_window)))
 
     flat_LON=flat_LON[index_window]
     flat_LAT=flat_LAT[index_window]
     flat_ALT=flat_ALT[index_window]
     flat_DATA=flat_DATA[index_window]
 
-    print('{}\n\n{}'.format(flat_LON,flat_LAT))
+    #print('{}\n\n{}'.format(flat_LON,flat_LAT))
+
+    #-------------------------------------------------------
+    # Step 3
+    #-------------------------------------------------------
+
+    # create a meshgrid starting at point1 and parallelto the logitude axis. the lenght of the meshgrid is the one of the line
+
+    # getting the lenght of the chosen line and the angle from the longitude axis
+    L=np.sqrt((lon2-lon1)**2+(lat2-lat1)**2)
+    delta=-math.atan((lat2-lat1)/(lon2-lon1))
+    print('Lenght= {0:.5}deg , Angle = {1:.5}rad'.format(L,delta))
+    print("""
+    ---------------------------------------------------
+                Creating the new meshgrid
+    ---------------------------------------------------
+""")
+    # creating the axis of the meshgrid 
+    x1=np.linspace(lon1,lon1+L,100)
+    y1=np.linspace(lat1-0.01,lat1+0.01,3)
+    z1=np.linspace(0,10000,30)
+    
+    # creating the meshgrid
+    X1,Y1,Z1=np.meshgrid(x1,y1,z1)
+
+    # rotate the meshgrid
+    c,s=np.cos(delta),np.sin(delta)
+    
+    X2=c*(X1-lon1)+s*(Y1-lat1)
+    Y2=-s*(X1-lon1)+c*(Y1-lat1)
+    Z2=Z1
+    X2=X2+lon1
+    Y2=Y2+lat1
+    print('Meshgrid created. Number of points = {}'.format(len(X2.flatten())))
+    print("""
+    ---------------------------------------------------
+                  Starting the interpolation
+    ---------------------------------------------------
+""")
+    #interpolation on the new meshgrid
+    new_DATA=scipy.interpolate.griddata(
+        ( flat_LON , flat_LAT , flat_ALT ),
+        flat_DATA,
+        ( X2 , Y2 , Z2 ),
+        #method='linear'
+        method='nearest'
+    )
+    # [print(a) for a in zip(X2.flatten(),Y2.flatten(),Z2.flatten(),new_DATA.flatten() ) ]
+        
+    #-------------------------------------------------------
+    # Step 4
+    #-------------------------------------------------------
+    
+    # extracting the slice corresponding to the chosen line
+    X,Z,D=X2[1,:,:],Z2[1,:,:],new_DATA[1,:,:]
+    
+    # masking the nans in the data
+    Dm=np.ma.masked_where(np.isnan(D),D)
+    # print(Dm)
+
+    #-------------------------------------------------------
+    # Step 5
+    #-------------------------------------------------------
+    print("""
+    ---------------------------------------------------
+                     Interpolation done
+    ---------------------------------------------------
+""")
+    return(X-lon1,Z,Dm)
+
+    
+def plot_bolton_1_slices(myradar,point1,point2,field,sweep=0,option='show'):
+    """
+    
+    This function allows to show a top view and one slic defined by two point.
+
+    Inputs:
+
+    myradar - radar object from which we want to plot data (tested for ppi mode only)
+    sweep - int sweep to plot the ppi part (corresponds to elevation if ppi mode)
+    point1, point2 - Tuple (lon,lat). Start ans end of the slice
+    field - string, 'DBZH' for reflectivity,'VRADH' for dopple velocity,'WRADH' for spec width
+    option - string 'show' or 'save'
+
+    Outputs:
+
+    Either a displayed plot or a saved plot depending on the value of option
+
+    """
+    
+    vol_t = num2date(myradar.time['data'], myradar.time['units'])[0]
+    #outloc = '../plots/' 
+    tz=11
+    el1 = myradar.get_elevation(sweep)[0]
+    dts = num2date(myradar.time['data'] + tz*60.*60., myradar.time['units'])
+
+
+    #-------------------------------------------------
+    # specifying the field parameters
+    #-------------------------------------------------
+    #plot of velocity
+    if field=='VRADH':
+        [outloc,vmin,vmax,colorbar_label,cmap,reference]=['../plots/dop_velocity/angle_{}/'.format(el1),-15,15,'Doppler Velocity (m/s)',pyart.graph.cm.BuDOr12,'dop_Velocity']
+        
+    #plot of reflectivity
+    elif field=='DBZH':
+        [outloc,vmin,vmax,colorbar_label,cmap,reference]=['../plots/reflectivity/angle_{}/'.format(el1),0,50,'Reflectivity (dBZ)',pyart.graph.cm.LangRainbow12,'Reflectivity']
+        
+    #plot spec width
+    elif field=='WRADH':
+        [outloc,vmin,vmax,colorbar_label,cmap,reference]=['../plots/spec_width/angle_{}/'.format(el1),0,15,'Spec Width (m/s)',pyart.graph.cm.BuDOr12,'Spec_width']
+
+   #-------------------------------------------------
+    #create the displays (radar map type)
+    #-------------------------------------------------
+    display=pyart.graph.RadarMapDisplay(myradar)
+    font={'size':10}
+    matplotlib.rc('font',**font)
+    fig=plt.figure(figsize=[8,15])
+
+    #-------------------------------------------------
+    #panel creation
+    #-------------------------------------------------
+    map_panel=[0.05,0.55,0.8,0.4]
+    slice_panel_1=[0.05,0.05,0.8,0.4]
+    colorbar_panel=[0.05,0.47,0.9,0.02]
+
+    #-------------------------------------------------
+    # map panel : field to plot and reflectivity contour, lines of azimuth
+    #-------------------------------------------------
+    ax=fig.add_axes(map_panel)
+    
+    display.plot_ppi_map(
+        field=field,sweep=sweep, vmin=vmin, vmax=vmax,
+        lat_lines = lat_lines, lon_lines = lon_lines,
+        max_lat = max_lat, min_lat = min_lat, min_lon = min_lon, max_lon = max_lon,
+        title_flag=False,
+        mask_outside = True,
+        colorbar_flag=False,
+        cmap = cmap,
+        # basemap = ref_m,
+        ax=ax
+        )
+    
+    # getting the radar position in basemap coordinates and plotting it as a point
+    lon,lat=myradar.longitude['data'][0],myradar.latitude['data'][0]
+    x,y=display.basemap(lon,lat)
+    
+    # plotting the line of the cross section
+    x1,y1=display.basemap(point1[0],point1[1])
+    x2,y2=display.basemap(point2[0],point2[1])
+    ax.plot([x1,x2],[y1,y2],'k--',lw=2)
+
+    #write the time as text on the figure
+    ax.text(x=0.1,y=0.8,s='t={}\nsweep = {}'.format(dts[0].strftime('%H%M'),sweep),fontsize=15,transform=ax.transAxes )
+
+    # write the coordinates of the two points
+    ax.text(
+        x=0.5,y=0.8,s='({}{})\n ({}{})'.format(point1[0],point1[1],point2[0],point2[1]),
+        fontsize=15, transform=ax.transAxes
+    )
+
+
+    #-------------------------------------------------
+    #slice panel_1: plot a slice corresponding to the chosen line
+    #-------------------------------------------------
+    X,Z,D=plot_slice(myradar=myradar,field=field,point1=point1,point2=point2)
+
+    
+    ax1=fig.add_axes(slice_panel_1)
+    ax1.pcolormesh(
+        X,Z,D,
+        vmin=vmin,
+        vmax=vmax,
+        cmap=cmap,
+        #colorbar_flag=False,
+        #title_flag=False,
+    )
+    ax1.grid(True)
+
+
+
+    #-------------------------------------------------
+    #colorbar panel
+    #-------------------------------------------------
+    cbax=fig.add_axes(colorbar_panel)
+    display.plot_colorbar(label=colorbar_label,cax=cbax,orient="horizontal")
+
+    #---------------------------------------
+    #Save the plot in outloc directory or show it
+    #---------------------------------------
+    if option=='save':
+        plt.savefig('{}Namoi_at_{}_el_{}_{}.png'.format(outloc,dts[0].strftime('%H%M_Z_on_%Y_%m_%d'),str(el1),reference),dpi=100)
+    if option=='show':
+        plt.show()
+    
+
+    
+    
     
 

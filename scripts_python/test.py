@@ -57,7 +57,7 @@ fls.sort()
 myrad=pyart.aux_io.read_odim_h5(dirname+fls[30],file_field_names=True)
 #plot_slice(myrad,point1=(149.63,-32),point2=(150.8,-32.2),field='DBZH')
 # print('{},{}'.format(myrad.longitude,myrad.latitude) )
-#plot_bolton_1_slices(myrad,point1=(150.39,-32),point2=(150.48,-32.4),field='DBZH',sweep=0,option='show')
+plot_bolton_1_slices(myrad,point1=(150.39,-32),point2=(150.48,-32.4),field='DBZH',sweep=0,option='show')
 #plot_bolton_2_slices(myradar=myrad,sweep=0,azimuth=[170,197],field="DBZH",option='show')
 
 

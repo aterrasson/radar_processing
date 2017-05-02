@@ -55,6 +55,10 @@ def plot_bolton_bom(myradar,sweep,field,contour_field='DBZH',option='show'):
     elif field=='WRADH':
         [outloc,vmin,vmax,colorbar_label,cmap,reference]=['../plots/spec_width/angle_{}/'.format(el1),0,10,'Spec Width (m/s)',pyart.graph.cm.BuDOr12,'Spec_width']
 
+    #plot of turbulence
+    elif field=='turbulence':
+        [outloc,vmin,vmax,colorbar_label,cmap,reference]=['../plots/turbulence/angle_{}/'.format(el1),0,2,'Turbulence (EDR^1/3)','pyart_LangRainbow12','Turbulence']
+
     #---------------------------------------
     #creating the outloc directory if it doesn't exist
     #---------------------------------------
@@ -94,7 +98,15 @@ def plot_bolton_bom(myradar,sweep,field,contour_field='DBZH',option='show'):
         ax=ax1
         )
     
-    plot_point(lon=myradar.longitude['data'][0],lat=myradar.latitude['data'][0],ax=ax1)
+    #plot two rings
+    display.plot_range_ring(100,ax=ax1,ls='-',c='r',lw=0.5)
+    display.plot_range_ring(150,ax=ax1,ls='-',c='k',lw=0.5)
+
+    #plot on line every 30 degrees
+    x,y=display.basemap(myradar.longitude['data'][0],myradar.latitude['data'][0])
+    for i in np.linspace(0,360,13):
+        plot_az(point=(x,y), angle=i, ax_to_plot=ax1,color='k',length=200,azimuth_to_trigo=True,lw=1)
+    #plot_point(lon=myradar.longitude['data'][0],lat=myradar.latitude['data'][0],ax=ax1)
 
     #---------------------------------------
     # adding reflectivity contours
@@ -142,7 +154,7 @@ def plot_bolton_bom(myradar,sweep,field,contour_field='DBZH',option='show'):
     
     return
 
-def plot_point(point, angle, ax_to_plot,color,length,azimuth_to_trigo,lw=1):
+def plot_az(point, angle, ax_to_plot,color,length,azimuth_to_trigo,lw=1):
      '''
      this function draws a line from a starting point to a specific angular direction
      
@@ -260,8 +272,8 @@ def plot_bolton_2_slices(myradar,sweep,azimuth,field,len_slice=180,option='show'
     x,y=display.basemap(lon,lat)
     
     # plotting the two lines corresponding to the two azimuths
-    plot_point( point=(x,y ), angle=azimuth[0], length=len_slice, ax_to_plot=ax,color='red',azimuth_to_trigo=True,lw=2)
-    plot_point( point=(x,y ), angle=azimuth[1], length=len_slice, ax_to_plot=ax,color='blue',azimuth_to_trigo=True,lw=2)
+    plot_az( point=(x,y ), angle=azimuth[0], length=len_slice, ax_to_plot=ax,color='red',azimuth_to_trigo=True,lw=2)
+    plot_az( point=(x,y ), angle=azimuth[1], length=len_slice, ax_to_plot=ax,color='blue',azimuth_to_trigo=True,lw=2)
     ax.plot([x],[y],marker='o',color='red')
 
     #write the time as text on the figure
@@ -356,6 +368,7 @@ def makeMP4(field):
         print(os.getcwd())
         #create an apply the command to make the video
         cmd="ffmpeg -r 2 -pattern_type glob -i '*.png' -pix_fmt yuv420p {}/{}_{}.mp4".format(output,field,angle)
+        #cmd="avconv -r 2 -i *.png -pix_fmt yuv420p {}/{}_{}.mp4".format(output,field,angle)
         print(cmd)
         os.system(cmd)
         print('Video created: {}/{}_{}.mp4'.format(output,field,angle))
@@ -402,7 +415,7 @@ def give_my_point_a_value(point,myradar,field,sweep):
     return z,data,gap
 
 
-def plot_slice(myradar,point1,point2,field):
+def return_slice(myradar,point1,point2,field):
     """
     The goal is to plot a slice of a field along a chosen line
 
@@ -645,7 +658,7 @@ def plot_bolton_1_slices(myradar,point1,point2,field,sweep=0,option='show'):
     #-------------------------------------------------
     #slice panel_1: plot a slice corresponding to the chosen line
     #-------------------------------------------------
-    X,Z,D=plot_slice(myradar=myradar,field=field,point1=point1,point2=point2)
+    X,Z,D=return_slice(myradar=myradar,field=field,point1=point1,point2=point2)
 
     
     ax1=fig.add_axes(slice_panel_1)
@@ -671,7 +684,7 @@ def plot_bolton_1_slices(myradar,point1,point2,field,sweep=0,option='show'):
     #Save the plot in outloc directory or show it
     #---------------------------------------
     if option=='save':
-        plt.savefig('{}Namoi_at_{}_el_{}_{}.png'.format(outloc,dts[0].strftime('%H%M_Z_on_%Y_%m_%d'),str(el1),reference),dpi=100)
+        print('save directory not implemented yet.')
     if option=='show':
         plt.show()
     

@@ -1,12 +1,49 @@
 #
 # coding: utf-8
 #
-# In[3]:
-#
-#
 #imports
 from imports import *
 
+'''
+------------------------------------------------------------
+                  List of functions
+------------------------------------------------------------
+
+ - plot_bolton_bom: 
+this function plots a field from aradar object, with contour reflectivity (obsolet, see plot_bolton_bom_V2)
+
+ - plot_az: this 
+function draws a line from a starting point to a specific angular direction
+
+ - plot_bolton_2_slices: 
+this function allows to show a top view and two slices defined by chosen azimuth, starting at the radar position.
+
+ - give_my_point_a_value: 
+returns altitude and field value of the closest neighbour
+ 
+ - make_mp4: 
+creates a mp4 file from the plots of a field
+
+ - return_slice: 
+This function returns a slice of a field along a chosen line (the vertical interpolation is not working correctly)
+
+ - plot_bolton_1_slices: 
+This function allows to show a top view and one slic defined by two points. Based on the return_slice function
+
+ - variable_through_time: 
+This function plots statistical variables of one field through time
+
+ - total_ref:
+This function plots the total reflectivity through time for each sweep, and eventually the associated standard deviation
+
+ - max_location:
+this function returns the value and coordinates of the maximum of a field
+
+ - plot_bolton_bom_V2:
+this function plots a field from aradar object, with contour reflectivity and have a functionning basemap, and possible background images
+
+
+'''
     #---------------------------------------
     # Range of lat/lonfor the plot
     #---------------------------------------
@@ -53,7 +90,7 @@ def plot_bolton_bom(myradar,sweep,field,contour_field='DBZH',option='show'):
         
     #plot spec width
     elif field=='WRADH':
-        [outloc,vmin,vmax,colorbar_label,cmap,reference]=['../plots/spec_width/angle_{}/'.format(el1),0,10,'Spec Width (m/s)',pyart.graph.cm.BuDOr12,'Spec_width']
+        [outloc,vmin,vmax,colorbar_label,cmap,reference]=['../plots/spec_width/angle_{}/'.format(el1),0,20,'Spec Width (m/s)','rainbow','Spec_width']
 
     #plot of turbulence
     elif field=='turbulence':
@@ -63,9 +100,10 @@ def plot_bolton_bom(myradar,sweep,field,contour_field='DBZH',option='show'):
     #creating the outloc directory if it doesn't exist
     #---------------------------------------
     if not os.path.exists(outloc): os.makedirs(outloc)
-        
+
+
     #---------------------------------------            
-    # creating the basemap
+    # creating the basemap WIP
     #---------------------------------------    
     ax1=f.add_subplot(1,1,1)
     
@@ -76,11 +114,10 @@ def plot_bolton_bom(myradar,sweep,field,contour_field='DBZH',option='show'):
     #             urcrnrlat=max_lat, 
     #             projection='tmerc', 
     #             resolution = 'i',
-    #             epsg = GDA94)
-    #m.arcgisimage(service= esriMap, xpixels = 1500, verbose= True)
-    
-    #load background image
-    # im = plt.imread('/home/fuego/Desktop/SirIvanFire/basemap.png')
+    #                 epsg = 3112)
+
+    # #load background image
+    # im = plt.imread('../basemap/coldfront/1620.png')
     # ref_m.imshow(im,zorder = 0,origin='upper')
 
     #---------------------------------------
@@ -89,12 +126,17 @@ def plot_bolton_bom(myradar,sweep,field,contour_field='DBZH',option='show'):
     display.plot_ppi_map(
         field=field,sweep=sweep, vmin=vmin, vmax=vmax,
         lat_lines = lat_lines, lon_lines = lon_lines,
+        # WIP
         max_lat = max_lat, min_lat = min_lat, min_lon = min_lon, max_lon = max_lon,
+        
         title_flag=False,
         mask_outside = True,
         colorbar_label=colorbar_label,
         cmap = cmap,
-        # basemap = ref_m,
+
+        # WIP
+        #basemap = ref_m,
+        
         ax=ax1
         )
     
@@ -376,7 +418,7 @@ def makeMP4(field):
 def give_my_point_a_value(point,myradar,field,sweep):
     
     """
-    return altitude and field value from the closest radar point available 
+    return altitude and field value of the closest neighbour 
     point - 2-tuple: (lon,lat) in WG84
     myradar - radar object (only tested with ppi radar)
     sweep - int
@@ -417,7 +459,7 @@ def give_my_point_a_value(point,myradar,field,sweep):
 
 def return_slice(myradar,point1,point2,field):
     """
-    The goal is to plot a slice of a field along a chosen line
+    This function return a slice of a field along a chosen line
 
     Steps:
     1 - extract the gates for longitude/latitude/altitude/chosen field
@@ -688,8 +730,531 @@ def plot_bolton_1_slices(myradar,point1,point2,field,sweep=0,option='show'):
     if option=='show':
         plt.show()
     
+def variable_through_time(field,sweep=0,window=[149.2767,-32.5433,151.1526,-31.4764],time_steps=(1100,2350),dirname='../NamoiData/',mean=False,mini=False,maxi=False,st_dev=False,option='show '):
+    """
+    This function plot statistical variables of one field through time
+
+    Inputs:
+
+    field - string, can be equal to 'DBZH', 'WRADH', or 'turbulence' ('VRADH' has not been implemented do to the lack of physical value here as it is relative to the angle with radar)
+    window - tuple of four floats: [min_lon, min_lat, max_lon, max_lat]
+    time_steps - tuple of integer, (beginning time , ending time). format is 1100 for 11am, 2345 for 11:45pm etc... for example (1100,1300) would plot the value acquired between 11am and 1pm
+    dirname - string, relative path of the radar files
+    mean,mini,maxi,st_dev - booleans. Wether of not these variables should be plotted
+    option - string, 'show' to display the plot, or 'save' to save it
+
+    Output:
+    Either a displayed plot or a png file
+
+    Steps:
+    1 - selecting the radar files corresponding to the wished time window
+    2 - reducing the gates to the wished spatial window
+    3 - calculating the wished statiscal variable for the selected data (over each time step)
+    4 - plotting the variables
+    """
+    #-------------------------------------------------
+    # Step 1
+    #-------------------------------------------------
+    
+    # getting a list of the radar files and selecting the ones in the wanted time_steps in wanted_fls
+    wanted_fls=[]
+    tmin,tmax=time_steps
+
+    if field=='DBZH':label='Reflectivity';unit='dBZ';outloc='../plots/reflectivity/stats/'
+    if field=='WRADH':label='Spectral width';unit='m/s';outloc='../plots/spec_width/stats/'
+    if field=='turbulence': label='Turbulence';unit='EDR^1/3';outloc='../plots/turbulence/stats/'
+    
+    fls=os.listdir(dirname)
+    fls.sort()
+    for fl in fls:
+        # selection of the files matching the asked time window
+        # this section is dodgy
+        utc=np.floor( int((fl.split("_")[2]).split(".")[0])*0.01 )
+        local_time=utc+1100
+        #print(local_time)
+        if local_time<=tmax and local_time>=tmin:
+            wanted_fls.append(fl)
+    print('The time window asked {} corresponds to {} radar files'.format(time_steps,len(wanted_fls)))
+
+    #-------------------------------------------------
+    # Step 2
+    #-------------------------------------------------
+
+    # extracting window dimensions
+    min_lon,min_lat,max_lon,max_lat=window
+
+    # Feedback on the window dimensions
+    print("""
+    Window dimensions:
+
+    ({0:.5},{3:.5})-------------------------({2:.5},{3:.5})
+        |                                          |
+        |                                          |
+        |                                          |
+    ({0:.5},{1:.5})-------------------------({2:.5},{1:.5})
+
+
+    """.format(min_lon,min_lat,max_lon,max_lat)
+    )
 
     
+    # we get the statiscal variabes for each time step in the time gap
     
+    L_TIME,L_MIN,L_MAX,L_MOY,L_STD=[],[],[],[],[]
+    for fl in wanted_fls:
+        # creation of a radar object
+        myradar=pyart.aux_io.read_odim_h5(
+         dirname + fl,
+         file_field_names=True
+        )
+
+        # get elevation
+        el=myradar.get_elevation(sweep)[0]
+        
+        # get the time of the ongoing time step
+        dts=num2date(myradar.time['data'] + 11*60.*60., myradar.time['units'])[0]
+        scantime=dts.strftime('%H%M')
+        scantime_dec=float(dts.strftime('%H'))+float(dts.strftime('%M'))/60
+        L_TIME.append(scantime_dec)
+        print('processing time step {}'.format(scantime))
+        
+        # calculate the turbulence field if it is asked
+        if field=='turbulence':print('Calculating the turbulence field');pytda.calc_turb_vol(radar=myradar,verbose=False,name_dz='DBZH',name_sw='WRADH')
+
+        
+        # selecting data corresponding to the sweep
+        s=myradar.get_start(sweep)
+        e=myradar.get_end(sweep)+1
+        
+        
+        # get the gates of longitude, latitude and the values the wished field
+        flat_LON=np.array(myradar.gate_longitude['data'][s:e]).flatten()
+        flat_LAT=np.array(myradar.gate_latitude['data'][s:e]).flatten()
+        flat_DATA=np.array(myradar.fields[field]['data'][s:e]).flatten()
+        
+ 
+        # reducing the data to the window
+        index_lon=[]
+        index_lat=[]
+        [index_lon.append(index ) for index,p in enumerate(flat_LON) if p<max_lon and p>min_lon]
+        [index_lat.append(index ) for index,p in enumerate(flat_LAT) if p<max_lat and p>min_lat]
+        index_window=list(set(index_lon) & set(index_lat))
+        flat_DATA=flat_DATA[index_window]
+        
+        # Masking the data equal to 0
+        flat_DATAm=[i for i in flat_DATA if i>0]
+        
+        #print('Number of points in the window = {}'.format(len(index_window)))
+
+
+        #-------------------------------------------------
+        # Step 3
+        #-------------------------------------------------
+
+        # get the mean, minimum, maximum, standard deviation value of the ongoing time step
+        if mean==True:MOY=np.mean(flat_DATAm);L_MOY.append(MOY)
+        if mini==True:MINI=min(flat_DATAm);L_MIN.append(MINI)
+        if maxi==True:MAXI=max(flat_DATAm);L_MAX.append(MAXI)
+        if st_dev==True:STD=np.std(flat_DATAm);L_STD.append(STD)
+
+
+
+    #-------------------------------------------------
+    # Step 4
+    #-------------------------------------------------
+        
+    #print(L_TIME,L_MOY,L_MIN,L_MAX,L_STD)
+    fig,ax1=plt.subplots(figsize=[10,6])
+    ax1.grid('on')
+    ax1.set_ylabel('{} {}'.format(label,unit))
+
+    # conditional plot
+    ncol=0
+    if mean==True: ax1.plot(L_TIME,L_MOY,label='Average',linewidth=2,color='k');ncol=ncol+1
+    if mini==True: ax1.plot(L_TIME,L_MIN,label='Min',linewidth=2,color='b');ncol=ncol+1
+    if maxi==True: ax1.plot(L_TIME,L_MAX,label='Max',linewidth=2,color='r');ncol=ncol+1
+    ax1.legend(bbox_to_anchor=(0,1.02,1,0.102),loc=2,mode='expand',ncol=ncol)
+
+    # rescaling the main axis
+    #ax1.set_ylim([min(L_MIN+L_MOY+L_MAX)-0.5,max(L_MIN+L_MOY+L_MAX)+0.5])
+    ax1.autoscale
+    # plotting the standard deviation on a secondary axis
+    if st_dev==True:ax2=ax1.twinx(); ax2.plot(L_TIME,L_STD,linewidth=2,linestyle='-',color='g'); ax2.set_ylabel('St Dev {}'.format(unit), color='g');[tl.set_color('g') for tl in ax2.get_yticklabels()]
+
+    ax1.set_xlim([min(L_TIME)-0.2,max(L_TIME)+0.2])
+    ax1.set_xlabel('Time on 2/12 (h)')
+    
+    if option=='show':plt.show()
+    if option=='save':
+        try: os.makedirs(outloc)
+        except:1
+        plt.savefig('{}{}_T_{}_{}_angle_{}.png'.format(outloc,field,tmin,tmax,el),dpi=100)
+        
+
+    
+def total_ref(field='DBZH',my_sweeps='all',window=[149.2767,-32.5433,151.1526,-31.4764],time_steps=(1100,2350),dirname='../NamoiData/',st_dev=False,option='show '):
+    """
+    This function plot the total reflectivity through time for each sweep, and eventually the associated standard deviation
+
+    Inputs:
+
+    field - string, can be equal to 'DBZH'
+    my_sweeps - string or list of integers: if equal to 'all', all the available sweep in the radar will be processed. If equal to a list of integers, only the sweeps associated to the number in this lis will be prosseced.
+    window - tuple of four floats: [min_lon, min_lat, max_lon, max_lat]
+    time_steps - tuple of integer, (beginning time , ending time). format is 1100 for 11am, 2345 for 11:45pm etc... for example (1100,1300) would plot the value acquired between 11am and 1pm
+    dirname - string, relative path of the radar files
+    st_dev - boolean. Wether of not this variable should be plotted
+    option - string, 'show' to display the plot, or 'save' to save it
+
+    Output:
+    Either a displayed plot or a png file
+
+    Steps:
+    1 - selecting the radar files corresponding to the wished time window
+    2 - reducing the gates to the wished spatial window
+    3 - creation of dictionnaries containing lists of the times steps, total reflectivity and standard deviation for each sweep. The keys are the sweeps numbers. For example L_SUM[2] contains a list of the total reflectivity, each component is associated to a time step 
+    4 - plotting the dictionnary
+    """
+    #-------------------------------------------------
+    # Step 1
+    #-------------------------------------------------
+    
+    # getting a list of the radar files and selecting the ones in the wanted time_steps in wanted_fls
+    wanted_fls=[]
+    tmin,tmax=time_steps
+
+    if field=='DBZH':label='Total reflectivity';unit='dBZ';outloc='../plots/reflectivity/stats/'
+    
+    fls=os.listdir(dirname)
+    fls.sort()
+    for fl in fls:
+        # selection of the files matching the asked time window
+        # this section is dodgy
+        utc=np.floor( int((fl.split("_")[2]).split(".")[0])*0.01 )
+        local_time=utc+1100
+        #print(local_time)
+        if local_time<=tmax and local_time>=tmin:
+            wanted_fls.append(fl)
+    print('The time window asked {} corresponds to {} radar files'.format(time_steps,len(wanted_fls)))
+
+    #-------------------------------------------------
+    # Step 2
+    #-------------------------------------------------
+
+    # extracting window dimensions
+    min_lon,min_lat,max_lon,max_lat=window
+
+    # Feedback on the window dimensions
+    print("""
+    Window dimensions:
+
+    ({0:.5},{3:.5})-------------------------({2:.5},{3:.5})
+        |                                          |
+        |                                          |
+        |                                          |
+    ({0:.5},{1:.5})-------------------------({2:.5},{1:.5})
+
+
+    """.format(min_lon,min_lat,max_lon,max_lat)
+    )
+
+    # initializing the dictionnaries
+    L_TIME,L_SUM,L_STD,L_elevation=dict(),dict(),dict(),dict()
+    myradar=pyart.aux_io.read_odim_h5(dirname+fls[0],file_field_names=True)
+    if my_sweeps=='all':sweeps=range(myradar.nsweeps)
+    else: sweeps=my_sweeps
+    for sweep in sweeps:
+        L_TIME[sweep]=[];L_SUM[sweep]=[];L_elevation[sweep]=myradar.get_elevation(sweep)[0]
+        if st_dev==True:L_STD[sweep]=[]
+
+    #creating the figure
+
+    fig,ax1=plt.subplots(figsize=[10,6])
+    ax1.grid('on')
+    ax1.set_ylabel('{} {}'.format(label,unit))
+    ax1.set_xlabel('Time on 2/12 (h)')
+    if st_dev==True:ax2=ax1.twinx();
+
+    
+    # loop on each wanted file (one wnated file corresponds to one wanted time step)
+    for fl in wanted_fls:
+        # creation of a radar object
+        myradar=pyart.aux_io.read_odim_h5(
+         dirname + fl,
+         file_field_names=True
+        )
+
+        # get the time of the ongoing time step
+        dts=num2date(myradar.time['data'] + 11*60.*60., myradar.time['units'])[0]
+        scantime=dts.strftime('%H%M')
+        scantime_dec=float(dts.strftime('%H'))+float(dts.strftime('%M'))/60
+        print('processing time step {}'.format(scantime))
+
+       
+        # calculate the turbulence field if it is asked
+        if field=='turbulence':print('Calculating the turbulence field');pytda.calc_turb_vol(radar=myradar,verbose=False,name_dz='DBZH',name_sw='WRADH')
+
+
+        
+
+        
+        # loop on each sweep
+        
+        for sweep in sweeps:
+
+            L_TIME[sweep].append(scantime_dec)
+
+            # selecting data corresponding to the sweep
+            s=myradar.get_start(sweep)
+            e=myradar.get_end(sweep)+1
+
+
+            # get the gates of longitude, latitude and the values the wished field
+            flat_LON=np.array(myradar.gate_longitude['data'][s:e]).flatten()
+            flat_LAT=np.array(myradar.gate_latitude['data'][s:e]).flatten()
+            flat_DATA=np.array(myradar.fields[field]['data'][s:e]).flatten()
+
+
+            # reducing the data to the window
+            index_lon=[]
+            index_lat=[]
+            [index_lon.append(index ) for index,p in enumerate(flat_LON) if p<max_lon and p>min_lon]
+            [index_lat.append(index ) for index,p in enumerate(flat_LAT) if p<max_lat and p>min_lat]
+            index_window=list(set(index_lon) & set(index_lat))
+            flat_DATA=flat_DATA[index_window]
+
+            # Masking the data equal to 0
+            flat_DATAm=[i for i in flat_DATA if i>0]
+
+
+
+            #-------------------------------------------------
+            # Step 3
+            #-------------------------------------------------
+
+            # get the sum, st dev of the data
+            SUM=sum(flat_DATAm);L_SUM[sweep].append(SUM)
+            if st_dev==True:STD=np.std(flat_DATAm);L_STD[sweep].append(STD)
+
+    print(L_TIME,L_SUM,L_STD)
+    for sweep in sweeps:
+        ax1.plot(L_TIME[sweep],L_SUM[sweep],label='{}_deg'.format(L_elevation[sweep]))
+        ax1.set_position([0.1,0.1,0.7,0.8])
+        ax1.legend(bbox_to_anchor=(1,0.5),loc='center left')
+        ax1.set_title('Total {} between {} and {} for {} angles'.format(field,tmin,tmax,len(sweeps)))
+
+    if option=='show':plt.show()
+    if option=='save':
+        try: os.makedirs(outloc)
+        except:1
+        plt.savefig('{}Total_{}_T={}_to_{}.png'.format(outloc,field,tmin,tmax,el),dpi=100)
+
+def height(angle,distance):
+    a_rad=math.radians(angle)
+    height=distance*math.sin(a_rad)
+    print('height={}'.format(height))
+
+
+def max_location(myradar,field,sweep):
+    '''
+    this function returns the value and coordinates of the maximum of a field
+    '''
+
+    s=myradar.get_start(sweep)
+    e=myradar.get_end(sweep)+1
+
+    #load ppi data
+    data  = myradar.fields[field]['data'][s:e].flatten()
+    #apply guassian smoothing
+    data  = spyi.gaussian_filter(data, sigma=1.2)
+
+    #load gat lat/lon grids
+    lon = myradar.gate_longitude['data'][s:e].flatten()
+    lat = myradar.gate_latitude['data'][s:e].flatten()
+    
+    max_value=max(data)
+    index_max=np.argmax(data)
+    lon_max,lat_max=lon[index_max],lat[index_max]
+    #print(max_value,lon_max,lat_max)
+
+    return(max_value,lon_max,lat_max)
+
+def plot_bolton_bom_V2(myradar,sweep,field,contour_field='DBZH',option='show'):
+    """
+    this function plots a field from aradar object, with contour reflectivity and have a functionning basemap, and possible background images
+
+    myradar - radar object from py art
+    sweep - int, the sweep we will plot
+    field - string 'DBZH' for reflectivity, 'VRADH' for doppler velocity, 'WRADH' for spec width
+    contour field - string 'DBZH' for reflectivity, 'VRADH' for doppler velocity, 'WRADH' for spec width. untested with other value than 'DBZH'. field sed to plot the contour.
+    option - string 'save' or 'show'
+    """
+    
+    display = pyart.graph.RadarMapDisplay(myradar)
+    vol_t = num2date(myradar.time['data'], myradar.time['units'])[0]
+    #outloc = '../plots/' 
+    tz=11
+    el1 = myradar.get_elevation(sweep)[0]
+    
+    # contour level that will be plotted
+    contour_levels=np.arange(10,50,10)
+ 
+    font = {'size': 7}
+    matplotlib.rc('font', **font)
+    f = plt.figure(figsize=(10,5),dpi=100)
+
+    #---------------------------------------
+    # 
+    #---------------------------------------
+    #plot of velocity
+    if field=='VRADH':
+        [outloc,vmin,vmax,colorbar_label,cmap,reference]=['../plots/dop_velocity/angle_{}/'.format(el1),-15,15,'Doppler Velocity (m/s)',pyart.graph.cm.BuDOr12,'dop_Velocity']
+        
+    #plot of reflectivity
+    elif field=='DBZH':
+        [outloc,vmin,vmax,colorbar_label,cmap,reference]=['../plots/reflectivity/angle_{}/'.format(el1),0,50,'Reflectivity (dBZ)',None,'Reflectivity']
+        
+    #plot spec width
+    elif field=='WRADH':
+        [outloc,vmin,vmax,colorbar_label,cmap,reference]=['../plots/spec_width/angle_{}/'.format(el1),0,20,'Spec Width (m/s)','rainbow','Spec_width']
+
+    #plot of turbulence
+    elif field=='turbulence':
+        [outloc,vmin,vmax,colorbar_label,cmap,reference]=['../plots/turbulence/angle_{}/'.format(el1),0,2,'Turbulence (EDR^1/3)','pyart_LangRainbow12','Turbulence']
+
+    #---------------------------------------
+    #creating the outloc directory if it doesn't exist
+    #---------------------------------------
+    if not os.path.exists(outloc): os.makedirs(outloc)
+        
+    #---------------------------------------            
+    # creating the basemap 
+    #---------------------------------------    
+    #ax1=f.add_subplot(1,1,1)
+    
+    
+    # ref_m = Basemap(llcrnrlon=min_lon,
+    #             llcrnrlat=min_lat,
+    #             urcrnrlon=max_lon,
+    #             urcrnrlat=max_lat, 
+    #             projection='tmerc', 
+    #             resolution = 'i',
+    #             epsg = GDA94)
+    #m.arcgisimage(service= esriMap, xpixels = 1500, verbose= True)
+    
+    #load background image
+    # im = plt.imread('/home/fuego/Desktop/SirIvanFire/basemap.png')
+    # ref_m.imshow(im,zorder = 0,origin='upper')
+
+    #---------------------------------------            
+    # creating the basemap WIP
+    #---------------------------------------    
+    ax1=f.add_subplot(1,1,1)
+    
+    
+    ref_m = Basemap(llcrnrlon=min_lon,
+                llcrnrlat=min_lat,
+                urcrnrlon=max_lon,
+                urcrnrlat=max_lat, 
+                projection='tmerc', 
+                resolution = 'i',
+                    #lat_0=(max_lat+min_lat)/2,
+                    #lon_0=(min_lon+max_lon)/2
+                    lat_0=myradar.latitude['data'][0],
+                    lon_0=myradar.longitude['data'][0]
+                #epsg = 3112
+    )
+
+    #load the right background image
+    # get the time of the ongoing time step
+    dts=num2date(myradar.time['data'] + 11*60.*60., myradar.time['units'])[0]
+    scantime=dts.strftime('%H%M')
+
+    
+    try:
+        im = plt.imread('../basemap/coldfront/{}_{}.png'.format(sweep,scantime))
+        ref_m.imshow(im,zorder = 10,origin='upper')
+    except:print('No coldfront basemap found for time step {}'.format(scantime))
+    #---------------------------------------
+    # plotting the chosen field
+    #---------------------------------------
+    display.plot_ppi_map(
+        field=field,sweep=sweep, vmin=vmin, vmax=vmax,
+        lat_lines = lat_lines, lon_lines = lon_lines,
+        # WIP
+        max_lat = max_lat, min_lat = min_lat, min_lon = min_lon, max_lon = max_lon,
+        
+        title_flag=False,
+        mask_outside = True,
+        colorbar_label=colorbar_label,
+        cmap = cmap,
+
+        # WIP
+        basemap = ref_m,
+        
+        ax=ax1
+        )
+    
+    #plot two rings
+    display.plot_range_ring(100,ax=ax1,ls='-',c='r',lw=0.5)
+    display.plot_range_ring(150,ax=ax1,ls='-',c='k',lw=0.5)
+
+    #plot on line every 30 degrees
+    x,y=display.basemap(myradar.longitude['data'][0],myradar.latitude['data'][0])
+    for i in np.linspace(0,360,13):
+        plot_az(point=(x,y), angle=i, ax_to_plot=ax1,color='k',length=200,azimuth_to_trigo=True,lw=1)
+    #plot_point(lon=myradar.longitude['data'][0],lat=myradar.latitude['data'][0],ax=ax1)
+
+    #---------------------------------------
+    # adding reflectivity contours
+    #---------------------------------------
+    
+    #find raw ppi data start/stop index
+    start = myradar.get_start(sweep)
+    end   = myradar.get_end(sweep) + 1
+    #load ppi data
+    data  = myradar.fields[contour_field]['data'][start:end]
+    #apply guassian smoothing
+    data  = spyi.gaussian_filter(data, sigma=1.2)
+
+    #load gat lat/lon grids
+    lon = myradar.gate_longitude['data'][start:end]
+    lat = myradar.gate_latitude['data'][start:end]
+
+    #convert lat,lon to basemap coords
+    x,y = display.basemap(lon,lat)
+    
+
+    #plot contours
+    contours=ax1.contour(x,y,data,contour_levels,colors='k',linewidths=1)
+    plt.clabel(contours,contour_levels,fmt='%r',inline=True,fontsize=10)
+
+    #---------------------------------------
+    #extract title parameters
+    #---------------------------------------
+    dts = num2date(myradar.time['data'] + tz*60.*60., myradar.time['units'])
+    scantime = dts[0].strftime('%H:%M Local Time on %Y %m %d')
+    ax1.set_title('Sir Ivan Bushfire at {} at elevation {} degrees, {}'.format(scantime,el1,reference) )
+    ax1.text(x=0.1,y=0.9,s='t={}'.format(dts[0].strftime('%H%M')),fontsize=20,transform=ax1.transAxes )
+
+    
+    #---------------------------------------
+    #Save the plot in outloc directory
+    #---------------------------------------
+    if option=='save':
+        plt.savefig('{}Namoi_at_{}_el_{}_{}.png'.format(outloc,dts[0].strftime('%H%M_Z_on_%Y_%m_%d'),str(el1),reference),dpi=100)
+    if option=='show':
+        plt.show()
+
+        
+    #print(m)
+    
+    plt.close()
+    
+    return
+
+        
+
+
     
 
